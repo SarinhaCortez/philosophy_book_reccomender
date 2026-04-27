@@ -4,7 +4,7 @@ This project is a small recommendation system prototype built around a simple qu
 
 > How can we recommend philosophy books from sparse, messy public metadata, while still keeping the system explainable and cheap enough to iterate on?
 
-The current version is intentionally shaped like an interview project rather than a production application. It shows a progression from a basic retrieval baseline to a more semantic recommender, while keeping the architecture small enough to reason about end to end.
+The current version shows a progression from a basic retrieval baseline to a more semantic recommender, while keeping the architecture small enough to reason about end to end.
 
 ![UI demo](./mygif.gif)
 
@@ -21,11 +21,11 @@ The system then tries to:
 3. retrieve semantically related titles,
 4. present them in a graph-oriented interface that invites exploration.
 
-This repo is therefore less about "book search" in the generic sense, and more about building a recommendation pipeline under realistic constraints:
+This repo is about building a recommendation pipeline under realistic constraints:
 
 - public metadata is noisy,
 - philosophy is a fuzzy domain,
-- many books have weak descriptions,
+- many books have weak or no descriptions,
 - the catalogue has to be curated before retrieval quality can improve,
 - and the recommendation logic should evolve in phases rather than jump immediately to a heavy system.
 
