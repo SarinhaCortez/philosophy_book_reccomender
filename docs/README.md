@@ -11,7 +11,7 @@ The current vrsion shows a progression from a basic retrieval baseline to a more
 ## Idea
 
 Being passionate for literature, I wanted to explore how I can make my bookworm personality come alive in my very scientific field of studies through this project.
-The idea is a reading reccomender users who want to start on philosophy but don't know where to start (me :)). A user writes a prompt such as:
+The idea is a reading reccomender for users who want to start on philosophy but don't know where to start (me :)). A user writes a prompt such as:
 
 > "I liked Nietzsche but now want something more practical and less dark about meaning."
 
