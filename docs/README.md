@@ -14,7 +14,7 @@ The product idea is a reading companion for philosophy-oriented users. A user wr
 
 > "I liked Nietzsche but now want something more practical and less dark about meaning."
 
-The system then tries to:
+The system must:
 
 1. understand what the user is looking for,
 2. search a local catalogue of philosophy books,
@@ -31,7 +31,7 @@ This repo is about building a rcommendation pipeline under realistic constraints
 
 ## Design Goals
 
-The implementation is guided the following design decisions.
+The implementation is guided by the following design decisions.
 
 ### 1. Keep the system inspectable
 
@@ -55,18 +55,18 @@ The current design favors:
 
 ### 3. Separate offline intelligence from online retrieval
 
-One of the key choices in the current version is that expensive book understanding happens offline.
+One of the key choices in the current version is book understanding happening offline.
 
 - **offline:** enrich books, embed books, build the semantic index
 - **online:** extract one user preference profile, embed one query, retrieve nearest books
 
-This keeps the online experience responsive while still allowing richer semantic matching than a purely lexical baseline.
+This keeps the online experience responsive while still allowing rich semantic matching.
 
 ### 4. Treat data quality as part of the recommender
 
 For this project, the catalogue is part of the recommendation logic. In the beginning, noisy entries such as fiction, self-help, programming, or generally non-philosophy books would enter the corpus through permissive Open Library subject metadata.
 
-So a large part of the engineering work here is:
+So a large part of the engineering work here was:
 
 - deciding what counts as "in-domain,"
 - filtering,
@@ -77,26 +77,19 @@ So a large part of the engineering work here is:
 Current high-level pipeline:
 
 ```text
-User prompt
--> LLM preference profile
--> query embedding
--> similarity search over pre-embedded books
--> recommendation list + graph UI
+User prompt -> LLM preference profile -> query embedding -> similarity search over pre-embedded books -> recommendation list + graph UI
 ```
 
-This can be understood as three stages.
+The development happened in two stages.
 
 ### Stage 1: Web-App and Catalogue building
 
-The project uses Open Library dumps rather than a live external books API.
+Goal:
 
-I chose a public, imperfect corpus because the project is trying to demonstrate system thinking. Some problems I faced were that Open Library metadata is noisy, subject labels are inconsistent, and a very small number of rated works, which would be usful to perform rating-based optimization.
+- configure a local philosophy catalogue, design stubbed UI and simple single-endpoint backend
 
-That decision was made for three reasons:
 
-1. **repeatability**: recommendations should not change because a third-party API is rate limiting or behaving differently;
-2. **cost and control**: local catalogues are easier to inspect and rebuild;
-3. **better system design**: retrieval quality starts with corpus quality.
+The project uses Open Library dumps rather than a live external books API. I chose a public, imperfect corpus because the project is trying to demonstrate system thinking. Some problems I faced were that Open Library metadata is noisy, subject labels are inconsistent, and a very small number of rated works, which would be usful to perform rating-based optimization.
 
 The catalogue builder:
 
@@ -108,6 +101,8 @@ The catalogue builder:
 
 A stricter filter yields a smaller but cleaner catalogue, a looser filter yields a larger but noisier one.
 
+The backend is a very small custom HTTP server . That is a conscious choice since the project has one main endpoin. If this project were extended, I would move it to a more standard framework.
+
 ### Stage 2: Semantic enrichment
 
 The current recommender uses a semantic pipeline in which:
@@ -117,7 +112,11 @@ The current recommender uses a semantic pipeline in which:
 - a user prompt is also turned into a structured profile and embedded,
 - ranking is done by vector similarity.
 
-I kept this design for a few reasons.
+Goal:
+
+- replace lexical matching for the definite semantic pipeline
+
+I chose to use LLM-based structured book profiling, LLM-based structured user preference profiling and embeddings for retrieval. This helps capturing nuance, since philosophy requests are often nuanced and not well captured by keywords alone, metadata is sparse and benefits from normalization, and semantic retrieval is a good fit for cold-start.
 
 #### Structured LLM profiles
 
@@ -168,27 +167,6 @@ This means the system is stronge at:
 - concept-level matching,
 - retrieving books that "feel right" even when wording differs.
 
-## Project Phases
-
-This repo has evolved in stages.
-
-### Phase 1: Local retrieval baseline
-
-Goal:
-
-- configure a local philosophy catalogue, design stubbed UI and simple single-endpoint backend
-
-I chose to use Open Library dumps and a local search dataset than a live API. This removes dependence on rate-limited external services and makes the corpus inspectable.
-
-The backend is a very small custom HTTP server . That is a conscious choice since the project has one main endpoin. If this project were extended, I would move it to a more standard framework.
-
-### Phase 2: Better book understanding, user understanding and matching
-
-Goal:
-
-- replace lexical matching for the definite semantic pipeline
-
-I chose to use LLM-based structured book profiling, LLM-based structured user preference profiling and embeddings for retrieval. This helps capturing nuance, since philosophy requests are often nuanced and not well captured by keywords alone, metadata is sparse and benefits from normalization, and semantic retrieval is a good fit for cold-start.
 
 ## Current Repository Structure
 
