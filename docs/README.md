@@ -10,7 +10,7 @@ The current vrsion shows a progression from a basic retrieval baseline to a more
 
 ## Idea
 
-Being passionate for literature, I wanted to explore how I can make my bookworm personality come alive in my very scientific field of studies through this project.
+Being passionate for literature, I wanted to explore how I can make my bookworm personality come alive in my very scientific field of studies through this project. I am currently leaning towards Machine Learning Systems for large-scale data, and so I sought to explore the mechanisms underlying Recommender Systems, a very practical application of this concept.
 The idea is a reading reccomender for users who want to start on philosophy but don't know where to start (me :)). A user writes a prompt such as:
 
 > "I liked Nietzsche but now want something more practical and less dark about meaning."
