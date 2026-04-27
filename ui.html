@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Philosophy Recommender</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=5">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  window.tailwind = {
+    config: {
+      theme: {
+        extend: {
+          colors: {
+            paper: "#f8f6f0",
+            surface: "#fffdf8",
+            wash: "#f0ece2",
+            ink: "#24211d",
+            muted: "#756f65",
+            faint: "#a49b8c",
+            line: "#ded6c7",
+            "line-strong": "#cbbfae",
+            clay: "#7c4f2c",
+            teal: "#2f6f73",
+            violet: "#7f5d93",
+            danger: "#9b3f37"
+          },
+          fontFamily: {
+            sans: ["Inter", "system-ui", "sans-serif"],
+            serif: ["EB Garamond", "Georgia", "serif"]
+          },
+          boxShadow: {
+            paper: "0 18px 50px rgba(66, 52, 35, 0.11)",
+            panel: "0 12px 28px rgba(36, 33, 29, 0.08)"
+          }
+        }
+      }
+    }
+  };
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.68), rgba(248,246,240,0) 42%),
+      #f8f6f0;
+    color: #24211d;
+    font-family: Inter, system-ui, sans-serif;
+  }
+  button, input, textarea { font: inherit; }
+  button { cursor: pointer; }
+  .graph-label {
+    paint-order: stroke;
+    stroke: #fffdf8;
+    stroke-width: 5px;
+    stroke-linejoin: round;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+const { useMemo, useState } = React;
+
+const SAMPLE_PROMPT = "I liked Nietzsche but now want something more practical and less dark about meaning.";
+const GRAPH_COLORS = ["#2f6f73", "#7c4f2c", "#7f5d93", "#39767f", "#9b6b2d", "#8b4b5f"];
+
+function App() {
+  const [page, setPage] = useState("start");
+  const [prompt, setPrompt] = useState(SAMPLE_PROMPT);
+  const [topSearch, setTopSearch] = useState("");
+  const [payload, setPayload] = useState(null);
+  const [selectedId, setSelectedId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const books = payload?.recommendations || [];
+  const selectedBook = books.find((book) => book.book_id === selectedId) || books[0] || null;
+  const requestQuery = payload?.search_request?.query || payload?.retrieval_query || "";
+
+  async function submitSearch(nextPrompt = prompt) {
+    const cleanPrompt = nextPrompt.trim();
+    if (!cleanPrompt) return;
+
+    setLoading(true);
+    setError("");
+    setPrompt(cleanPrompt);
+    setTopSearch(cleanPrompt);
+
+    try {
+      const response = await fetch("/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: cleanPrompt, max_results: 18 })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || data.error || "The backend returned an error.");
+      }
+      setPayload(data);
+      setSelectedId(data.recommendations?.[0]?.book_id || "");
+      setPage("results");
+    } catch (searchError) {
+      setError(searchError.message);
+      setPayload(null);
+      setPage("results");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openStart() {
+    setPrompt(topSearch.trim() || prompt);
+    setPage("start");
+    setError("");
+  }
+
+  return (
+    <div className="min-h-screen">
+      <Header
+        page={page}
+        topSearch={topSearch}
+        setTopSearch={setTopSearch}
+        loading={loading}
+        onSearch={() => submitSearch(topSearch || prompt)}
+        onNew={openStart}
+      />
+      {page === "start" ? (
+        <StartPage
+          prompt={prompt}
+          setPrompt={setPrompt}
+          loading={loading}
+          onSearch={() => submitSearch(prompt)}
+        />
+      ) : (
+        <ResultsPage
+          books={books}
+          selectedBook={selectedBook}
+          selectedId={selectedId}
+          setSelectedId={setSelectedId}
+          requestQuery={requestQuery}
+          error={error}
+          loading={loading}
+          onRefine={openStart}
+        />
+      )}
+    </div>
+  );
+}
+
+function Header({ page, topSearch, setTopSearch, loading, onSearch, onNew }) {
+  return (
+    <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">
+      <div className="flex min-h-[72px] items-center gap-4 px-5 py-3 md:px-8">
+        <button className="grid h-10 w-10 place-items-center overflow-hidden bg-transparent" type="button" onClick={onNew} aria-label="Start a new search">
+          <img src="/favicon.svg?v=5" alt="" className="h-9 w-9 object-contain" />
+        </button>
+        <button className="mr-2 text-left" type="button" onClick={onNew}>
+          <span className="block font-serif text-2xl font-semibold leading-6 text-clay">Philosophy Recommender</span>
+        </button>
+        {page === "results" && (
+          <form
+            className="hidden h-11 max-w-2xl flex-1 items-center gap-3 rounded-lg border border-line bg-white px-4 shadow-sm md:flex"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSearch();
+            }}
+          >
+            <SearchIcon />
+            <input
+              className="w-full bg-transparent text-lg text-ink outline-none placeholder:text-faint"
+              value={topSearch}
+              onChange={(event) => setTopSearch(event.target.value)}
+              placeholder="Search a philosophical question"
+            />
+          </form>
+        )}
+        <div className="ml-auto flex items-center gap-3">
+          {page === "results" && (
+            <button className="rounded-md border border-[#5f3b21] bg-[#6a4124] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[#5f3b21]" type="button" onClick={onNew}>
+              Refine prompt
+            </button>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function StartPage({ prompt, setPrompt, loading, onSearch }) {
+  return (
+    <main className="grid min-h-[calc(100vh-65px)] place-items-center px-5 py-10">
+      <section className="grid w-full max-w-5xl gap-7 md:grid-cols-[1.05fr_0.78fr]">
+        <div className="rounded-lg border border-line bg-surface p-8 shadow-paper">
+          <div className="mb-4 text-xs font-bold uppercase tracking-[0.14em] text-teal">Local Open Library catalogue</div>
+          <h1 className="font-serif text-5xl leading-[0.94] text-ink md:text-7xl">
+            Map books around the question you are carrying.
+          </h1>
+          <p className="mt-5 max-w-2xl font-serif text-2xl leading-8 text-muted">
+            The recommender searches a philosophy catalogue and turns the returned books into a connected reading graph.
+          </p>
+        </div>
+        <form
+          className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-6 shadow-paper"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSearch();
+          }}
+        >
+          <label className="text-xs font-bold uppercase tracking-[0.1em] text-muted" htmlFor="prompt">Reading prompt</label>
+          <textarea
+            id="prompt"
+            className="min-h-52 resize-y rounded-lg border border-line-strong bg-white p-4 leading-6 text-ink outline-none focus:border-teal focus:ring-4 focus:ring-teal/10"
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            required
+          />
+          <button className="min-h-11 rounded-lg border border-[#5f3b21] bg-[#6a4124] px-4 font-bold text-white shadow-sm transition hover:bg-[#5f3b21] disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={loading}>
+            {loading ? "Retrieving candidates..." : "Build recommendation graph"}
+          </button>
+      
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function ResultsPage({ books, selectedBook, selectedId, setSelectedId, requestQuery, error, loading, onRefine }) {
+  return (
+    <main className="grid h-[calc(100vh-65px)] grid-rows-[1fr] overflow-hidden">
+      <section className="grid min-h-0 grid-cols-1 bg-surface lg:grid-cols-[330px_minmax(0,1fr)]">
+        <BookList books={books} selectedId={selectedId} setSelectedId={setSelectedId} />
+        <div className="min-h-0 overflow-y-auto bg-[#fbfaf6]">
+          <GraphPanel
+            books={books}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
+            error={error}
+            loading={loading}
+            requestQuery={requestQuery}
+          />
+          <BookDetails book={selectedBook} />
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function BookList({ books, selectedId, setSelectedId }) {
+  return (
+    <aside className="min-h-0 overflow-y-auto border-r border-line bg-[#fcfaf5]">
+      <div className="sticky top-0 z-10 border-b border-line bg-[#fcfaf5] px-5 py-5">
+        <div className="font-serif text-[28px] font-normal leading-7 text-[#a49b8c]">Reading stack</div>
+        <div className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-violet"></div>      </div>
+      {books.length ? books.map((book, index) => (
+        <button
+          key={book.book_id || `${book.title}-${index}`}
+          className={`grid w-full grid-cols-[34px_minmax(0,1fr)] gap-3 border-b border-line px-5 py-4 text-left hover:bg-paper ${selectedId === book.book_id ? "bg-wash" : "bg-[#fcfaf5]"}`}
+          type="button"
+          onClick={() => setSelectedId(book.book_id)}
+        >
+          <span className={`grid h-8 w-8 place-items-center rounded-md border text-sm font-bold ${selectedId === book.book_id ? "border-[#8a5a36] bg-paper text-[#7c4f2c]" : "border-line bg-surface text-teal"}`}>
+            {index + 1}
+          </span>
+          <span className="min-w-0">
+            <span className="line-clamp-2 text-lg font-semibold leading-6 text-ink">{book.title || "Untitled"}</span>
+            <span className="mt-1 block truncate text-sm text-muted">{authorLine(book)}</span>
+            <span className="mt-2 block text-xs font-bold uppercase tracking-[0.08em] text-teal">{book.first_publish_year ?? 0}</span>
+          </span>
+        </button>
+      )) : (
+        <div className="px-5 py-6 text-sm leading-6 text-muted">Search results will appear here.</div>
+      )}
+    </aside>
+  );
+}
+
+function GraphPanel({ books, selectedId, setSelectedId, error, loading, requestQuery }) {
+  const graph = useMemo(() => makeGraph(books), [books]);
+
+  return (
+    <section className="relative overflow-hidden border-b border-line bg-[#fbfaf6]">
+      <div className="absolute left-6 top-6 z-10">
+        <div className="font-serif text-[28px] italic font-normal leading-7 text-[#a49b8c]">
+          your recommendation constellation...
+        </div>
+      </div>
+      <div className="absolute right-6 bottom-5 z-10">
+        <div className="text-xs italic tracking-[0.06em] text-[#a49b8c]">
+          ...nodes are retrieved books...
+        </div>
+      </div>
+      {error ? (
+        <div className="absolute left-6 right-6 top-28 z-10 rounded-lg border border-danger/30 bg-surface p-5 text-danger shadow-panel">{error}</div>
+      ) : null}
+      {loading ? (
+        <div className="absolute right-6 top-6 z-10 rounded-full border border-line bg-surface px-4 py-2 text-sm font-bold text-muted shadow-panel">Retrieving candidates...</div>
+      ) : null}
+      <svg className="h-[58vh] min-h-[500px] w-full" viewBox="0 0 900 620" role="img" aria-label="Graph of recommended books">
+        <rect width="900" height="620" fill="#fbfaf6" />
+        {graph.edges.map((edge, index) => (
+          <line
+            key={`${edge.from.book_id}-${edge.to.book_id}-${index}`}
+            x1={edge.from.x}
+            y1={edge.from.y}
+            x2={edge.to.x}
+            y2={edge.to.y}
+            stroke="#cbbfae"
+            strokeWidth={edge.shared ? 1.6 : 0.9}
+            strokeDasharray={edge.shared ? "0" : "5 8"}
+            opacity={edge.shared ? 0.7 : 0.38}
+          />
+        ))}
+        {graph.nodes.map((node, index) => {
+          const active = node.book.book_id === selectedId;
+          return (
+            <g
+              key={node.book.book_id || `${node.book.title}-${index}`}
+              tabIndex="0"
+              role="button"
+              aria-label={node.book.title || "Recommended book"}
+              onClick={() => setSelectedId(node.book.book_id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") setSelectedId(node.book.book_id);
+              }}
+              className="cursor-pointer outline-none"
+            >
+              <circle cx={node.x} cy={node.y} r={node.r + 11} fill={node.color} opacity={active ? 0.18 : 0.07} />
+              <circle cx={node.x} cy={node.y} r={node.r} fill={active ? darkenColor(node.color, 0.34) : node.color} opacity={active ? 0.97 : 0.76} />
+              <circle cx={node.x - node.r * 0.32} cy={node.y - node.r * 0.35} r={Math.max(3, node.r * 0.22)} fill="#fffdf8" opacity="0.45" />
+              <text
+                className="select-none text-[11px] font-bold"
+                x={node.x}
+                y={node.y + 4}
+                textAnchor="middle"
+                fill={active ? "#f4e8ff" : "#f8f6f0"}
+              >
+                {index + 1}
+              </text>
+              <text
+                className="graph-label select-none text-[12px] font-bold"
+                x={node.x}
+                y={node.y + node.r + 20}
+                textAnchor="middle"
+                fill={active ? "#7c4f2c" : "#24211d"}
+              >
+                {shortTitle(node.book.title)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </section>
+  );
+}
+
+function BookDetails({ book }) {
+  if (!book) {
+    return (
+      <section className="bg-[#fbfaf6] p-7">
+        <div className="text-muted">Select a recommendation to inspect it.</div>
+      </section>
+    );
+  }
+
+  const subjects = (book.subjects || book.categories || []).slice(0, 8);
+
+  return (
+    <section className="bg-[#fbfaf6] px-6 py-7 md:px-8">
+      <div className="grid gap-7 lg:grid-cols-[minmax(0,0.95fr)_minmax(280px,0.55fr)]">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-[0.12em] text-violet">selected recommendation</div>
+          <h2 className="mt-2 font-serif text-4xl font-semibold leading-10 text-ink">{book.title || "Untitled"}</h2>
+          <p className="mt-4 text-lg leading-7 text-muted">{authorLine(book)}</p>
+          <p className="mt-7 whitespace-pre-line text-lg leading-8 text-ink">
+            {stripHtml(book.description || "No description in the local catalogue.")}
+          </p>
+          {book.why_recommended ? (
+            <p className="mt-7 border-l-4 border-teal pl-4 font-serif text-xl italic leading-7 text-clay">{book.why_recommended}</p>
+          ) : null}
+        </div>
+        <div className="rounded-lg border border-line bg-surface p-5 shadow-panel">
+          <div className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Themes</div>
+          {subjects.length ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {subjects.map((subject) => (
+                <span key={subject} className="rounded-full border border-line bg-wash px-3 py-1 text-xs font-bold text-clay">{subject}</span>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 text-sm text-muted">No themes available for this book.</div>
+          )}
+          {book.preview_link ? (
+            <a className="mt-7 inline-flex rounded-md border border-[#5f3b21] bg-[#6a4124] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[#5f3b21]" href={book.preview_link} target="_blank" rel="noreferrer">
+              Open catalogue page
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function makeGraph(books) {
+  const center = { x: 455, y: 300 };
+  const anchors = [
+    [0, 0], [-145, -28], [-84, 112], [104, -95], [152, 78], [-230, 82],
+    [240, -8], [-222, -126], [16, 154], [314, 122], [-342, 8], [310, -160],
+    [-86, -188], [140, 190], [-290, 188], [10, -240], [385, -28], [-390, -84]
+  ];
+  const maxRatings = Math.max(1, ...books.map((book) => Number(book.ratings_count || 0)));
+  const nodes = books.map((book, index) => {
+    const [dx, dy] = anchors[index] || spiralPoint(index);
+    const ratings = Number(book.ratings_count || 0);
+    const scale = ratings / maxRatings;
+    return {
+      book,
+      x: center.x + dx,
+      y: center.y + dy,
+      r: index === 0 ? 30 : 11 + Math.sqrt(scale) * 24,
+      color: GRAPH_COLORS[index % GRAPH_COLORS.length]
+    };
+  });
+
+  const edges = [];
+  for (let index = 1; index < nodes.length; index += 1) {
+    edges.push({ from: nodes[0], to: nodes[index], shared: false });
+  }
+  for (let a = 0; a < nodes.length; a += 1) {
+    for (let b = a + 1; b < nodes.length; b += 1) {
+      if (edges.length > 46) break;
+      if (sharedSubjects(nodes[a].book, nodes[b].book).length) {
+        edges.push({ from: nodes[a], to: nodes[b], shared: true });
+      }
+    }
+  }
+
+  return { nodes, edges };
+}
+
+function spiralPoint(index) {
+  const angle = index * 2.34;
+  const radius = 140 + index * 11;
+  return [Math.cos(angle) * radius, Math.sin(angle) * radius];
+}
+
+function sharedSubjects(a, b) {
+  const aSubjects = new Set((a.subjects || []).map((subject) => subject.toLowerCase()));
+  return (b.subjects || []).filter((subject) => aSubjects.has(subject.toLowerCase()));
+}
+
+function authorLine(book) {
+  return (book.authors || []).join(", ") || "Unknown author";
+}
+
+function shortTitle(title = "Untitled") {
+  const clean = title.replace(/\s+/g, " ").trim();
+  return clean.length > 28 ? `${clean.slice(0, 27)}...` : clean;
+}
+
+function darkenColor(hex, amount = 0.25) {
+  const clean = String(hex).replace("#", "");
+  if (clean.length !== 6) return hex;
+  const channels = [0, 2, 4].map((index) => {
+    const value = Number.parseInt(clean.slice(index, index + 2), 16);
+    return Math.max(0, Math.round(value * (1 - amount)));
+  });
+  return `#${channels.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function stripHtml(value) {
+  const div = document.createElement("div");
+  div.innerHTML = value;
+  return div.textContent || div.innerText || "";
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6 text-muted" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m16.5 16.5 4 4" />
+    </svg>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

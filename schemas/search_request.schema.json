@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SearchRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["query"],
+  "properties": {
+    "query": { "type": "string" },
+    "subjects": { "type": "array", "items": { "type": "string" } },
+    "authors": { "type": "array", "items": { "type": "string" } },
+    "max_results": { "type": "integer", "minimum": 1, "maximum": 100 }
+  }
+}

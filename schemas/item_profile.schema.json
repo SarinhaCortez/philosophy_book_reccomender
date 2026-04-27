@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BookRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["book_id", "title"],
+  "properties": {
+    "book_id": { "type": "string" },
+    "title": { "type": "string" },
+    "authors": { "type": "array", "items": { "type": "string" } },
+    "description": { "type": "string" },
+    "subjects": { "type": "array", "items": { "type": "string" } },
+    "language": { "type": "string" },
+    "ratings_count": { "type": "integer", "minimum": 0 },
+    "first_publish_year": { "type": "string" },
+    "page_count": { "type": ["integer", "null"], "minimum": 1 },
+    "thumbnail_url": { "type": "string" },
+    "preview_link": { "type": "string" },
+    "source": { "type": "string" },
+    "source_query": { "type": "string" }
+  }
+}
