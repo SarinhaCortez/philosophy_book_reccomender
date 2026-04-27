@@ -8,7 +8,7 @@ The current vrsion shows a progression from a basic retrieval baseline to a more
 
 ![UI demo](./mygif.gif)
 
-## Project Framing
+## Idea
 
 The product idea is a reading companion for philosophy-oriented users. A user writes a prompt such as:
 
