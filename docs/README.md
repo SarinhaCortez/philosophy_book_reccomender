@@ -209,6 +209,13 @@ Improvements I am currently working on include:
 
 - explore beyond perfect matching and echo chambers, provide reliable novel and different reccomendations
 
+### 4. Improve explanations
+
+Future explanations should be:
+
+- specific about the match,
+- robust enough to justify surprising recommendations.
+
 ## Run 
 
 
