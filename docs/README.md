@@ -1,10 +1,10 @@
 # Philosophy Recommender
 
-This project is a small recommendation system prototype built around a simple question:
+This project is a small recommendation system prototype built around the question:
 
 > How can we recommend philosophy books from sparse, messy public metadata, while still keeping the system explainable and cheap enough to iterate on?
 
-The current version shows a progression from a basic retrieval baseline to a more semantic recommender, while keeping the architecture small enough to reason about end to end.
+The current vrsion shows a progression from a basic retrieval baseline to a more semantic recommender, while keeping the architecture small enough to reason about end to end.
 
 ![UI demo](./mygif.gif)
 
@@ -21,21 +21,21 @@ The system then tries to:
 3. retrieve semantically related titles,
 4. present them in a graph-oriented interface that invites exploration.
 
-This repo is about building a recommendation pipeline under realistic constraints:
+This repo is about building a rcommendation pipeline under realistic constraints:
 
 - public metadata is noisy,
 - philosophy is a fuzzy domain,
 - many books have weak or no descriptions,
 - the catalogue has to be curated before retrieval quality can improve,
-- and the recommendation logic should evolve in phases rather than jump immediately to a heavy system.
+- and the reccomendation logic should evolve iteratively
 
 ## Design Goals
 
-The implementation is guided by four design decisions.
+The implementation is guided the following design decisions.
 
 ### 1. Keep the system inspectable
 
-I deliberately avoided hiding the whole recommendation process behind a single opaque service. The pipeline is split into small stages:
+The pipeline is split into small stages:
 
 - catalogue construction,
 - structured semantic enrichment,
@@ -64,11 +64,9 @@ This keeps the online experience responsive while still allowing richer semantic
 
 ### 4. Treat data quality as part of the recommender
 
-For this project, the catalogue is not just an input. It is part of the recommendation logic.
+For this project, the catalogue is part of the recommendation logic. In the beginning, noisy entries such as fiction, self-help, programming, or generally non-philosophy books would enter the corpus through permissive Open Library subject metadata.
 
-That became especially clear after seeing noisy entries such as fiction, self-help, programming, or generally non-philosophy books enter the corpus through permissive Open Library subject metadata.
-
-So a large part of the engineering work here is really:
+So a large part of the engineering work here is:
 
 - deciding what counts as "in-domain,"
 - filtering,
@@ -88,9 +86,11 @@ User prompt
 
 This can be understood as three stages.
 
-### Stage 1: Catalogue building
+### Stage 1: Web-App and Catalogue building
 
 The project uses Open Library dumps rather than a live external books API.
+
+I chose a public, imperfect corpus because the project is trying to demonstrate system thinking. Some problems I faced were that Open Library metadata is noisy, subject labels are inconsistent, and a very small number of rated works, which would be usful to perform rating-based optimization.
 
 That decision was made for three reasons:
 
@@ -106,18 +106,11 @@ The catalogue builder:
 - ranks by number of ratings,
 - writes a local JSONL catalogue.
 
-Important tradeoff:
-
-- a stricter filter yields a smaller but cleaner catalogue,
-- a looser filter yields a larger but noisier one.
-
-That tradeoff is visible in this repo and is intentional: it reflects a real recommender design tension rather than being polished away.
+A stricter filter yields a smaller but cleaner catalogue, a looser filter yields a larger but noisier one.
 
 ### Stage 2: Semantic enrichment
 
-The current recommender no longer relies on the older keyword-weighting scorer.
-
-Instead, it uses a semantic pipeline in which:
+The current recommender uses a semantic pipeline in which:
 
 - books are enriched into structured profiles,
 - those profiles are embedded,
@@ -126,22 +119,20 @@ Instead, it uses a semantic pipeline in which:
 
 I kept this design for a few reasons.
 
-#### Why use structured LLM profiles at all?
+#### Structured LLM profiles
 
 A raw free-text prompt like:
 
 > "I want something gentler than Nietzsche, still about meaning."
 
-contains several useful signals that are not just keywords:
+contains several useful signals:
 
 - author affinity,
 - desired tone,
 - implicit topic,
 - implicit avoidance.
 
-Turning prompts into a structured preference profile gives the system a more stable semantic representation than naive token matching.
-
-Likewise for books, the Open Library metadata often needs normalization into fields such as:
+Turning prompts into a structured preference profile gives the system a more stable semantic representation than naive token matching. Likewise for books, the Open Library metadata often needs normalization into fields such as:
 
 - themes,
 - traditions,
@@ -150,18 +141,9 @@ Likewise for books, the Open Library metadata often needs normalization into fie
 - difficulty,
 - era.
 
-#### Why precompute book embeddings offline?
+#### Offline computation of book embeddings
 
-Because the expensive part is repeated book understanding, not per-query search.
-
-If every recommendation request had to re-profile and re-embed books online, the system would be:
-
-- slow,
-- expensive,
-- rate-limit prone,
-- and much harder to reason about.
-
-Precomputing a semantic index is a clean MVP compromise.
+The expensive part is repeated book understanding, not per-query search. If every recommendation request had to re-profile and re-embed books online, the system would be slow, expensive, rate-limit prone.
 
 #### Gemini Batch API
 
@@ -194,114 +176,19 @@ This repo has evolved in stages.
 
 Goal:
 
-- get a working recommender over a local philosophy catalogue
+- configure a local philosophy catalogue, design stubbed UI and simple single-endpoint backend
 
-Main choice:
+I chose to use Open Library dumps and a local search dataset than a live API. This removes dependence on rate-limited external services and makes the corpus inspectable.
 
-- use Open Library dumps and a local search flow rather than a live API
+The backend is a very small custom HTTP server . That is a conscious choice since the project has one main endpoin. If this project were extended, I would move it to a more standard framework.
 
-Why:
-
-- removes dependence on rate-limited external services,
-- makes the corpus inspectable,
-- creates a stable base for later recommendation improvements.
-
-### Phase 2: Better book understanding, better user understanding, better matching
+### Phase 2: Better book understanding, user understanding and matching
 
 Goal:
 
-- replace brittle lexical matching with a semantic pipeline
+- replace lexical matching for the definite semantic pipeline
 
-Main choices:
-
-- LLM-based structured book profiling,
-- LLM-based structured user preference profiling,
-- embeddings for retrieval.
-
-Why:
-
-- philosophy requests are often nuanced and not well captured by keywords alone,
-- metadata is sparse and benefits from normalization,
-- semantic retrieval is a better fit for cold-start than collaborative methods.
-
-### Phase 3: Interaction-aware recommendations
-
-Planned next step:
-
-- collect user interactions,
-- add collaborative filtering or collaborative reranking.
-
-Why this is Phase 3 and not earlier:
-
-- collaborative filtering without interaction data is premature,
-- semantic retrieval solves cold start better,
-- and a hybrid design makes more sense once user behavior starts accumulating.
-
-The likely direction is:
-
-- log impressions, clicks, selections, and opens,
-- create a lightweight interaction store,
-- add item-to-item collaborative signals,
-- blend them into the semantic ranking rather than replace it.
-
-## Key Tradeoffs
-
-### Local catalogue vs larger commercial dataset
-
-I chose a public, imperfect corpus because the project is trying to demonstrate system thinking, not just vendor access.
-
-The downside is obvious:
-
-- Open Library metadata is noisy,
-- subject labels are inconsistent,
-- some good books are sparse,
-- some bad books sneak in unless filtered carefully.
-
-The upside is that it forced the recommendation design to deal with realistic data quality problems.
-
-### Simplicity vs framework richness
-
-The backend is a very small custom HTTP server rather than FastAPI or Flask.
-
-That is a conscious choice for this stage:
-
-- the project has one main endpoint,
-- the recommendation logic matters more than framework surface area,
-- and a smaller server keeps attention on the system design itself.
-
-If this project were extended into a multi-user or production-oriented service, I would move it to a more standard framework.
-
-### Strict catalogue vs large catalogue
-
-This is probably the most important product tradeoff in the repo.
-
-A strict philosophy filter gives:
-
-- fewer books,
-- less garbage,
-- more trust in the recommendation space.
-
-A permissive filter gives:
-
-- more books,
-- but more fiction, self-help, programming, and adjacent noise.
-
-For a philosophy recommender, I currently prefer the cleaner core, even if that means the catalogue is smaller than the original 10k target.
-
-### LLM enrichment vs cost discipline
-
-LLM enrichment improves semantic structure, but it introduces:
-
-- cost,
-- latency,
-- quota management,
-- and dependency on model behavior.
-
-This is why the design keeps LLM use concentrated in places where it adds the most value:
-
-- offline book understanding,
-- online user-profile extraction,
-- sparse-description fallback enrichment for UI display.
+I chose to use LLM-based structured book profiling, LLM-based structured user preference profiling and embeddings for retrieval. This helps capturing nuance, since philosophy requests are often nuanced and not well captured by keywords alone, metadata is sparse and benefits from normalization, and semantic retrieval is a good fit for cold-start.
 
 ## Current Repository Structure
 
@@ -317,9 +204,7 @@ Core files:
 
 Data and build scripts:
 
-- `data/books.jsonl`: local catalogue
 - `data/semantic_index.jsonl`: precomputed semantic index
-- `scripts/build_openlibrary_catalog.py`: philosophy catalogue builder
 - `scripts/build_semantic_index.py`: direct semantic index builder
 - `scripts/build_semantic_index_batch.py`: cheaper batch-based semantic index builder
 - `scripts/append_zero_rated_philosophers.py`: append zero-rated works by selected canonical philosophers
@@ -343,7 +228,6 @@ Improvements I am currently working on include:
 ### 3. Diversity and Serendipity focus
 
 - explore beyond perfect matching and echo chambers, provide reliable novel and different reccomendations
-
 
 ## Run 
 
@@ -370,3 +254,4 @@ For this prototype, the key artifacts are:
 - a curated local catalogue,
 - a precomputed semantic index,
 - and the recommendation service built on top of them.
+
