@@ -188,7 +188,7 @@ Data and build scripts:
 - `scripts/build_semantic_index_batch.py`: cheaper batch-based semantic index builder
 - `scripts/append_zero_rated_philosophers.py`: append zero-rated works by selected canonical philosophers
 
-## What I Would Improve Next
+## Further Improvements
 
 Improvements I am currently working on include: 
 
