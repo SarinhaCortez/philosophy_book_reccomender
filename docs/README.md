@@ -10,16 +10,17 @@ The current vrsion shows a progression from a basic retrieval baseline to a more
 
 ## Idea
 
-The product idea is a reading companion for philosophy-oriented users. A user writes a prompt such as:
+Being passionate for literature, I wanted to explore how I can make my bookworm personality come alive in my very scientific field of studies through this project.
+The idea is a reading reccomender users who want to start on philosophy but don't know where to start (me :)). A user writes a prompt such as:
 
 > "I liked Nietzsche but now want something more practical and less dark about meaning."
 
-The system must:
+And then the system:
 
-1. understand what the user is looking for,
-2. search a local catalogue of philosophy books,
-3. retrieve semantically related titles,
-4. present them in a graph-oriented interface that invites exploration.
+1. understands what the user is looking for,
+2. searches a local catalogue of philosophy books,
+3. retrieves semantically related titles,
+4. presents them in a graph-oriented interface that invites exploration.
 
 This repo is about building a rcommendation pipeline under realistic constraints:
 
