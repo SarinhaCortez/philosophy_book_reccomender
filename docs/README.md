@@ -105,6 +105,12 @@ The backend is a very small custom HTTP server . That is a conscious choice sinc
 
 ### Stage 2: Semantic enrichment
 
+Goal:
+
+- replace lexical matching for the definite semantic pipeline
+
+I chose to use LLM-based structured book profiling, LLM-based structured user preference profiling and embeddings for retrieval. This helps capturing nuance, since philosophy requests are often nuanced and not well captured by keywords alone, metadata is sparse and benefits from normalization, and semantic retrieval is a good fit for cold-start.
+
 The current recommender uses a semantic pipeline in which:
 
 - books are enriched into structured profiles,
@@ -112,17 +118,12 @@ The current recommender uses a semantic pipeline in which:
 - a user prompt is also turned into a structured profile and embedded,
 - ranking is done by vector similarity.
 
-Goal:
-
-- replace lexical matching for the definite semantic pipeline
-
-I chose to use LLM-based structured book profiling, LLM-based structured user preference profiling and embeddings for retrieval. This helps capturing nuance, since philosophy requests are often nuanced and not well captured by keywords alone, metadata is sparse and benefits from normalization, and semantic retrieval is a good fit for cold-start.
 
 #### Structured LLM profiles
 
 A raw free-text prompt like:
 
-> "I want something gentler than Nietzsche, still about meaning."
+> "I want something not as difficult or harsh as Nietzsche, still about meaning."
 
 contains several useful signals:
 
@@ -170,7 +171,7 @@ This means the system is stronge at:
 
 ## Current Repository Structure
 
-Core files:
+Logic: 
 
 - `ui.html`: light-mode graph-oriented frontend
 - `myrecsys/app.py`: local HTTP server and `/recommend` endpoint
