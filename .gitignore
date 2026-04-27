@@ -5,3 +5,5 @@
 *vscode*
 *dumps*
 *.env*
+*book_enrichment_cache.json*
+*books.jsonl*
