@@ -12,6 +12,7 @@ import gzip
 import heapq
 import json
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -113,6 +114,39 @@ DENY_SUBJECT_TERMS = {
 NORMALIZED_STRONG_TERMS = tuple()
 NORMALIZED_WEAK_TERMS = tuple()
 NORMALIZED_DENY_SUBJECT_TERMS = tuple()
+NORMALIZED_COMMENTARY_SUBJECT_TERMS = tuple()
+
+COMMENTARY_TITLE_PATTERNS = (
+    "a little history of",
+    "history of",
+    "story of",
+    "introduction to",
+    "readings in",
+    "understanding",
+    "conversations with",
+    "autobiography",
+    "biography",
+    "the worldly philosophers",
+    "at the existentialist cafe",
+)
+
+COMMENTARY_SUBJECT_TERMS = {
+    "anthologie",
+    "autobiographies",
+    "autobiography",
+    "biographies",
+    "biography",
+    "catalogs",
+    "catalogues",
+    "commentaries",
+    "criticism",
+    "criticism and interpretation",
+    "history and criticism",
+    "introductions",
+    "readers",
+    "reference",
+    "textbooks",
+}
 
 
 def main() -> int:
@@ -143,14 +177,21 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     with args.output.open("w", encoding="utf-8") as output:
+        hydrated_rows: list[dict[str, Any]] = []
         for row in rows:
-            row["authors"] = [
-                author_names.get(key, key.removeprefix("/authors/"))
-                for key in row.pop("author_keys", [])
-            ]
+            row["authors"] = primary_author_list(
+                [
+                    author_names.get(key, key.removeprefix("/authors/"))
+                    for key in row.pop("author_keys", [])
+                ]
+            )
+            hydrated_rows.append(row)
+
+        cleaned_rows = clean_catalog_rows(hydrated_rows, limit=args.limit)
+        for row in cleaned_rows:
             output.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    print(f"Wrote {len(rows)} records to {args.output}")
+    print(f"Wrote {len(cleaned_rows)} cleaned records to {args.output}")
     return 0
 
 
@@ -369,11 +410,15 @@ def initialize_term_indexes() -> None:
     global NORMALIZED_STRONG_TERMS
     global NORMALIZED_WEAK_TERMS
     global NORMALIZED_DENY_SUBJECT_TERMS
+    global NORMALIZED_COMMENTARY_SUBJECT_TERMS
 
     NORMALIZED_STRONG_TERMS = tuple(normalize_subject(term) for term in sorted(STRONG_PHILOSOPHY_TERMS))
     NORMALIZED_WEAK_TERMS = tuple(normalize_subject(term) for term in sorted(WEAK_PHILOSOPHY_TERMS))
     NORMALIZED_DENY_SUBJECT_TERMS = tuple(
         normalize_subject(term) for term in sorted(DENY_SUBJECT_TERMS)
+    )
+    NORMALIZED_COMMENTARY_SUBJECT_TERMS = tuple(
+        normalize_subject(term) for term in sorted(COMMENTARY_SUBJECT_TERMS)
     )
 
 def dedupe_preserve_order(values: list[str]) -> list[str]:
@@ -386,6 +431,62 @@ def dedupe_preserve_order(values: list[str]) -> list[str]:
         seen.add(key)
         deduped.append(value)
     return deduped
+
+
+def primary_author_list(values: list[str]) -> list[str]:
+    authors = [value.strip() for value in values if value and value.strip()]
+    if not authors:
+        return []
+    return [authors[0]]
+
+
+def normalized_title_key(title: str) -> str:
+    normalized = unicodedata.normalize("NFKD", title)
+    ascii_title = normalized.encode("ascii", "ignore").decode("ascii")
+    return " ".join(re.findall(r"[a-z0-9]+", ascii_title.casefold()))
+
+
+def is_commentary_or_reference_row(row: dict[str, Any]) -> bool:
+    normalized_title = normalized_title_key(str(row.get("title", "")))
+    if not normalized_title:
+        return True
+    if any(pattern in normalized_title for pattern in COMMENTARY_TITLE_PATTERNS):
+        return True
+
+    normalized_subjects = {
+        normalize_subject(str(subject))
+        for subject in row.get("subjects", [])
+    }
+    return any(term in normalized_subjects for term in NORMALIZED_COMMENTARY_SUBJECT_TERMS)
+
+
+def clean_catalog_rows(rows: list[dict[str, Any]], *, limit: int | None = None) -> list[dict[str, Any]]:
+    selected_by_title: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        cleaned = dict(row)
+        cleaned["authors"] = primary_author_list(list(cleaned.get("authors", [])))
+        if is_commentary_or_reference_row(cleaned):
+            continue
+
+        title_key = normalized_title_key(str(cleaned.get("title", "")))
+        if not title_key:
+            continue
+
+        incumbent = selected_by_title.get(title_key)
+        if incumbent is None or (
+            int(cleaned.get("ratings_count", 0)),
+            int(cleaned.get("filter_score", 0)),
+        ) > (
+            int(incumbent.get("ratings_count", 0)),
+            int(incumbent.get("filter_score", 0)),
+        ):
+            selected_by_title[title_key] = cleaned
+
+    cleaned_rows = list(selected_by_title.values())
+    cleaned_rows.sort(key=lambda item: (-int(item.get("ratings_count", 0)), normalized_title_key(item["title"])))
+    if limit is not None:
+        return cleaned_rows[:limit]
+    return cleaned_rows
 
 
 def extract_description(value: Any) -> str:

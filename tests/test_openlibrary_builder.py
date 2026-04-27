@@ -1,8 +1,10 @@
 from scripts.build_openlibrary_catalog import (
+    clean_catalog_rows,
     find_single_dump,
     load_ratings_counts,
     matching_philosophy_subjects,
     normalize_work,
+    primary_author_list,
 )
 
 
@@ -89,3 +91,45 @@ def test_load_ratings_counts_counts_rows_per_work(tmp_path):
     )
 
     assert load_ratings_counts(ratings) == {"/works/OL1W": 2, "/works/OL2W": 1}
+
+
+def test_primary_author_list_keeps_only_first_author():
+    assert primary_author_list(["Plato", "Translator", "Editor"]) == ["Plato"]
+
+
+def test_clean_catalog_rows_dedupes_titles_and_skips_commentary():
+    rows = [
+        {
+            "title": "Poetics",
+            "authors": ["Aristotle", "Translator"],
+            "subjects": ["Aesthetics"],
+            "ratings_count": 7,
+            "filter_score": 6,
+        },
+        {
+            "title": "Poetics",
+            "authors": ["Aristotle"],
+            "subjects": ["Aesthetics"],
+            "ratings_count": 4,
+            "filter_score": 6,
+        },
+        {
+            "title": "History of Philosophy",
+            "authors": ["A. C. Grayling"],
+            "subjects": ["Philosophy", "History"],
+            "ratings_count": 9,
+            "filter_score": 4,
+        },
+    ]
+
+    cleaned = clean_catalog_rows(rows)
+
+    assert cleaned == [
+        {
+            "title": "Poetics",
+            "authors": ["Aristotle"],
+            "subjects": ["Aesthetics"],
+            "ratings_count": 7,
+            "filter_score": 6,
+        }
+    ]
