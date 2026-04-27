@@ -86,9 +86,9 @@ User prompt
 -> recommendation list + graph UI
 ```
 
-This can be understood as three layers.
+This can be understood as three stages.
 
-### Layer 1: Catalogue building
+### Stage 1: Catalogue building
 
 The project uses Open Library dumps rather than a live external books API.
 
@@ -113,7 +113,7 @@ Important tradeoff:
 
 That tradeoff is visible in this repo and is intentional: it reflects a real recommender design tension rather than being polished away.
 
-### Layer 2: Semantic enrichment
+### Stage 2: Semantic enrichment
 
 The current recommender no longer relies on the older keyword-weighting scorer.
 
@@ -163,7 +163,7 @@ If every recommendation request had to re-profile and re-embed books online, the
 
 Precomputing a semantic index is a clean MVP compromise.
 
-#### Why Gemini Batch API?
+#### Gemini Batch API
 
 The book-enrichment stage can involve thousands of records. Doing those calls one by one is both slow and unnecessarily expensive.
 
@@ -180,19 +180,11 @@ At the moment, recommendations are primarily driven by **semantic similarity** b
 - the embedded user preference profile,
 - and the embedded book semantic profiles.
 
-This means the system is currently strongest at:
+This means the system is stronge at:
 
 - prompt-based cold start,
 - concept-level matching,
 - retrieving books that "feel right" even when wording differs.
-
-It is currently weaker at:
-
-- personalization from historical user behavior,
-- popularity-aware ranking beyond the catalogue build,
-- distinguishing subtle within-author preferences over time.
-
-That is not an accident. It corresponds to the current project phase.
 
 ## Project Phases
 
