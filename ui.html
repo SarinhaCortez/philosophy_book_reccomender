@@ -145,6 +145,7 @@ function App() {
       ) : (
         <ResultsPage
           books={books}
+          graphEdges={graphEdges}
           selectedBook={selectedBook}
           selectedId={selectedId}
           setSelectedId={setSelectedId}
@@ -235,7 +236,7 @@ function StartPage({ prompt, setPrompt, loading, onSearch }) {
   );
 }
 
-function ResultsPage({ books, selectedBook, selectedId, setSelectedId, requestQuery, error, loading, onRefine }) {
+function ResultsPage({ books, graphEdges, selectedBook, selectedId, setSelectedId, requestQuery, error, loading, onRefine }) {
   return (
     <main className="grid h-[calc(100vh-65px)] grid-rows-[1fr] overflow-hidden">
       <section className="grid min-h-0 grid-cols-1 bg-surface lg:grid-cols-[330px_minmax(0,1fr)]">
