@@ -84,6 +84,7 @@ function App() {
   const [error, setError] = useState("");
 
   const books = payload?.recommendations || [];
+  const graphEdges = payload?.graph_edges || [];
   const selectedBook = books.find((book) => book.book_id === selectedId) || books[0] || null;
   const requestQuery = payload?.search_request?.query || payload?.retrieval_query || "";
 
@@ -242,6 +243,7 @@ function ResultsPage({ books, selectedBook, selectedId, setSelectedId, requestQu
         <div className="min-h-0 overflow-y-auto bg-[#fbfaf6]">
           <GraphPanel
             books={books}
+            graphEdges={graphEdges}
             selectedId={selectedId}
             setSelectedId={setSelectedId}
             error={error}
@@ -284,8 +286,8 @@ function BookList({ books, selectedId, setSelectedId }) {
   );
 }
 
-function GraphPanel({ books, selectedId, setSelectedId, error, loading, requestQuery }) {
-  const graph = useMemo(() => makeGraph(books), [books]);
+function GraphPanel({ books, graphEdges, selectedId, setSelectedId, error, loading, requestQuery }) {
+  const graph = useMemo(() => makeGraph(books, graphEdges), [books, graphEdges]);
 
   return (
     <section className="relative overflow-hidden border-b border-line bg-[#fbfaf6]">
@@ -315,9 +317,9 @@ function GraphPanel({ books, selectedId, setSelectedId, error, loading, requestQ
             x2={edge.to.x}
             y2={edge.to.y}
             stroke="#cbbfae"
-            strokeWidth={edge.shared ? 1.6 : 0.9}
-            strokeDasharray={edge.shared ? "0" : "5 8"}
-            opacity={edge.shared ? 0.7 : 0.38}
+            strokeWidth={0.8 + edge.weight * 2.2}
+            strokeDasharray="0"
+            opacity={0.2 + edge.weight * 0.6}
           />
         ))}
         {graph.nodes.map((node, index) => {
@@ -410,7 +412,7 @@ function BookDetails({ book }) {
   );
 }
 
-function makeGraph(books) {
+function makeGraph(books, graphEdges = []) {
   const center = { x: 455, y: 300 };
   const anchors = [
     [0, 0], [-145, -28], [-84, 112], [104, -95], [152, 78], [-230, 82],
@@ -431,18 +433,19 @@ function makeGraph(books) {
     };
   });
 
-  const edges = [];
-  for (let index = 1; index < nodes.length; index += 1) {
-    edges.push({ from: nodes[0], to: nodes[index], shared: false });
-  }
-  for (let a = 0; a < nodes.length; a += 1) {
-    for (let b = a + 1; b < nodes.length; b += 1) {
-      if (edges.length > 46) break;
-      if (sharedSubjects(nodes[a].book, nodes[b].book).length) {
-        edges.push({ from: nodes[a], to: nodes[b], shared: true });
-      }
-    }
-  }
+  const nodeById = new Map(nodes.map((node) => [node.book.book_id, node]));
+  const edges = graphEdges
+    .map((edge) => {
+      const from = nodeById.get(edge.from_book_id);
+      const to = nodeById.get(edge.to_book_id);
+      if (!from || !to) return null;
+      return {
+        from,
+        to,
+        weight: Number(edge.weight || 0),
+      };
+    })
+    .filter(Boolean);
 
   return { nodes, edges };
 }
@@ -451,11 +454,6 @@ function spiralPoint(index) {
   const angle = index * 2.34;
   const radius = 140 + index * 11;
   return [Math.cos(angle) * radius, Math.sin(angle) * radius];
-}
-
-function sharedSubjects(a, b) {
-  const aSubjects = new Set((a.subjects || []).map((subject) => subject.toLowerCase()));
-  return (b.subjects || []).filter((subject) => aSubjects.has(subject.toLowerCase()));
 }
 
 function authorLine(book) {

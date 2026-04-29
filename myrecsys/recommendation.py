@@ -23,9 +23,14 @@ def recommend_books(
     request = SearchRequest(query=query, max_results=max_results)
     retrieval_mode = "semantic"
     user_profile: dict[str, Any] = {}
+    graph_edges: list[dict[str, Any]] = []
 
     try:
-        results, extracted_profile = search_semantic_catalog(request)
+        semantic_payload = search_semantic_catalog(request)
+        if len(semantic_payload) == 3:
+            results, extracted_profile, graph_edges = semantic_payload
+        else:
+            results, extracted_profile = semantic_payload
         user_profile = extracted_profile.to_dict()
         enriched_books = enrich_books_for_display([result.book for result in results])
         results = [
@@ -34,6 +39,7 @@ def recommend_books(
                 score=result.score,
                 matched_fields=result.matched_fields,
                 explanation=result.explanation,
+                match_reasons=result.match_reasons,
             )
             for index, result in enumerate(results)
         ]
@@ -46,6 +52,7 @@ def recommend_books(
             "retrieval_query": query,
             "retrieval_mode": retrieval_mode,
             "user_profile": user_profile,
+            "graph_edges": graph_edges,
             "recommendations": [],
         }
 
@@ -56,11 +63,13 @@ def recommend_books(
         "retrieval_query": query,
         "retrieval_mode": retrieval_mode,
         "user_profile": user_profile,
+        "graph_edges": graph_edges,
         "recommendations": [
             {
                 **asdict(result.book),
                 "score": result.score,
                 "matched_fields": result.matched_fields,
+                "match_reasons": result.match_reasons,
                 "why_recommended": result.explanation,
             }
             for result in results

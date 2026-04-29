@@ -76,7 +76,7 @@ def search_semantic_catalog(
     query_profile: UserPreferenceProfile | None = None,
     query_vector: list[float] | None = None,
     max_results: int | None = None,
-) -> tuple[list[SearchResult], UserPreferenceProfile]:
+) -> tuple[list[SearchResult], UserPreferenceProfile, list[dict[str, Any]]]:
     """Search the semantic index using embeddings only."""
 
     if not semantic_index_path.exists():
@@ -94,23 +94,29 @@ def search_semantic_catalog(
         )[0]
 
     entries = list(iter_semantic_index(semantic_index_path))
-    scored: list[SearchResult] = []
+    scored: list[tuple[SearchResult, list[float]]] = []
     for entry in entries:
         similarity = cosine_similarity(query_vector, entry.embedding)
         if similarity <= 0:
             continue
-        explanation = explain_semantic_match(entry.profile, query_profile)
+        match_reasons = collect_semantic_match_reasons(entry.book, entry.profile, query_profile)
+        explanation = explain_semantic_match(entry.book, entry.profile, query_profile, match_reasons)
         scored.append(
-            SearchResult(
+            (
+                SearchResult(
                 book=entry.book,
                 score=similarity,
                 matched_fields=["semantic"],
                 explanation=explanation,
+                match_reasons=match_reasons,
+                ),
+                entry.embedding,
             )
         )
 
-    scored.sort(key=lambda item: item.score, reverse=True)
-    return scored[: max_results or request.max_results], query_profile
+    scored.sort(key=lambda item: item[0].score, reverse=True)
+    selected_pairs = scored[: max_results or request.max_results]
+    return [result for result, _ in selected_pairs], query_profile, build_knn_graph_edges(selected_pairs)
 
 
 def iter_semantic_index(path: Path) -> Iterable[SemanticCatalogEntry]:
@@ -368,17 +374,136 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     return numerator / (left_norm * right_norm)
 
 
-def explain_semantic_match(book_profile: BookProfile, user_profile: UserPreferenceProfile) -> str:
-    overlaps = []
-    overlaps.extend(shared_items(book_profile.themes, user_profile.themes))
-    overlaps.extend(shared_items(book_profile.traditions, user_profile.traditions))
-    overlaps.extend(shared_items(book_profile.reader_moods, user_profile.desired_qualities))
-    overlaps = dedupe_preserve_order(overlaps)
-    if overlaps:
-        return f"Semantic match on {', '.join(overlaps[:3])}."
-    if book_profile.summary:
-        return "Semantic match based on the book profile and your prompt."
-    return "Semantic match."
+def build_knn_graph_edges(
+    selected_pairs: list[tuple[SearchResult, list[float]]],
+    *,
+    neighbors_per_node: int = 2,
+) -> list[dict[str, Any]]:
+    if len(selected_pairs) < 2:
+        return []
+
+    edge_weights: dict[tuple[str, str], float] = {}
+    for index, (result, embedding) in enumerate(selected_pairs):
+        neighbors: list[tuple[float, str]] = []
+        for other_index, (other_result, other_embedding) in enumerate(selected_pairs):
+            if index == other_index:
+                continue
+            similarity = cosine_similarity(embedding, other_embedding)
+            if similarity <= 0:
+                continue
+            neighbors.append((similarity, other_result.book.book_id))
+
+        neighbors.sort(key=lambda item: item[0], reverse=True)
+        for similarity, other_book_id in neighbors[:neighbors_per_node]:
+            edge_key = tuple(sorted((result.book.book_id, other_book_id)))
+            edge_weights[edge_key] = max(edge_weights.get(edge_key, 0.0), similarity)
+
+    return [
+        {"from_book_id": left, "to_book_id": right, "weight": weight}
+        for (left, right), weight in sorted(edge_weights.items(), key=lambda item: item[1], reverse=True)
+    ]
+
+
+def collect_semantic_match_reasons(
+    book: BookRecord,
+    book_profile: BookProfile,
+    user_profile: UserPreferenceProfile,
+) -> dict[str, Any]:
+    return {
+        "matched_themes": shared_items(book_profile.themes, user_profile.themes),
+        "matched_traditions": shared_items(book_profile.traditions, user_profile.traditions),
+        "matched_reader_moods": shared_items(book_profile.reader_moods, user_profile.desired_qualities),
+        "matched_styles": shared_items(book_profile.style_descriptors, user_profile.desired_qualities),
+        "matched_authors": shared_items(book.authors, user_profile.liked_authors),
+        "matched_notable_people": shared_items(book_profile.notable_people, user_profile.liked_authors),
+        "supporting_themes": book_profile.themes[:3],
+        "supporting_traditions": book_profile.traditions[:2],
+        "supporting_styles": book_profile.style_descriptors[:2],
+        "difficulty_relation": describe_difficulty_relation(user_profile.difficulty, book_profile.difficulty),
+        "summary": book_profile.summary,
+    }
+
+
+def explain_semantic_match(
+    book: BookRecord,
+    book_profile: BookProfile,
+    user_profile: UserPreferenceProfile,
+    match_reasons: dict[str, Any],
+) -> str:
+    direct_matches = dedupe_preserve_order(
+        match_reasons.get("matched_authors", [])
+        + match_reasons.get("matched_notable_people", [])
+        + match_reasons.get("matched_themes", [])
+        + match_reasons.get("matched_traditions", [])
+    )
+    support_bits: list[str] = []
+    if direct_matches:
+        support_bits.append(f"your prompt lines up with {human_join(direct_matches[:3])}")
+    if match_reasons.get("matched_reader_moods"):
+        support_bits.append(
+            f"it fits the tone of {human_join(match_reasons['matched_reader_moods'][:2])}"
+        )
+    elif match_reasons.get("matched_styles"):
+        support_bits.append(
+            f"its style comes across as {human_join(match_reasons['matched_styles'][:2])}"
+        )
+    difficulty_relation = str(match_reasons.get("difficulty_relation", "")).strip()
+    if difficulty_relation:
+        support_bits.append(difficulty_relation)
+
+    if support_bits:
+        first_sentence = "This is a strong match because " + "; ".join(support_bits) + "."
+    else:
+        first_sentence = "This recommendation comes from a close semantic fit between your prompt and the book profile."
+
+    summary = str(match_reasons.get("summary", "")).strip()
+    if summary:
+        second_sentence = summary if summary[-1] in ".!?" else f"{summary}."
+    else:
+        metadata_bits: list[str] = []
+        if match_reasons.get("supporting_traditions"):
+            metadata_bits.append(f"it sits in {human_join(match_reasons['supporting_traditions'])}")
+        if match_reasons.get("supporting_themes"):
+            metadata_bits.append(f"it focuses on {human_join(match_reasons['supporting_themes'])}")
+        if match_reasons.get("supporting_styles"):
+            metadata_bits.append(f"the writing reads as {human_join(match_reasons['supporting_styles'])}")
+        second_sentence = (
+            "Within the catalogue, " + "; ".join(metadata_bits) + "."
+            if metadata_bits
+            else "The available metadata still places it close to the ideas in your prompt."
+        )
+
+    return f"{first_sentence} {second_sentence}".strip()
+
+
+def describe_difficulty_relation(requested: str, available: str) -> str:
+    requested_value = normalize_difficulty_label(requested)
+    available_value = normalize_difficulty_label(available)
+    if not requested_value or not available_value:
+        return ""
+    if requested_value == available_value:
+        return f"its difficulty is aligned at a {available_value} level"
+    scale = {"low": 1, "medium": 2, "high": 3}
+    difference = scale[available_value] - scale[requested_value]
+    if difference > 0:
+        return f"it is somewhat more demanding than your requested {requested_value} level"
+    return f"it is somewhat more accessible than your requested {requested_value} level"
+
+
+def normalize_difficulty_label(value: str) -> str:
+    normalized = value.strip().casefold()
+    return normalized if normalized in {"low", "medium", "high"} else ""
+
+
+def human_join(values: list[str]) -> str:
+    cleaned = [value.strip() for value in values if value and value.strip()]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    if len(cleaned) == 2:
+        return f"{cleaned[0]} and {cleaned[1]}"
+    return f"{', '.join(cleaned[:-1])}, and {cleaned[-1]}"
 
 
 def shared_items(left: list[str], right: list[str]) -> list[str]:
